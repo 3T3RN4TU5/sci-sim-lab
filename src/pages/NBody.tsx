@@ -92,13 +92,13 @@ export default function NBody() {
     ctx.globalCompositeOperation = 'lighter'
     const heavy = new Set(s.preset.heavy)
     const small = b.n > 200
-    ctx.fillStyle = small ? 'rgba(144, 180, 255, 0.55)' : C.blue
+    ctx.fillStyle = small ? 'rgba(144, 180, 255, 0.8)' : C.blue
     for (let i = 0; i < b.n; i++) {
       if (heavy.has(i)) continue
       const x = X(b.x[i])
       const y = Y(b.y[i])
       if (x < -2 || y < -2 || x > width + 2 || y > height + 2) continue
-      if (small) ctx.fillRect(x - 0.8, y - 0.8, 1.6, 1.6)
+      if (small) ctx.fillRect(x - 1, y - 1, 2, 2)
       else {
         ctx.beginPath()
         ctx.arc(x, y, 3, 0, 2 * Math.PI)
@@ -164,14 +164,21 @@ export default function NBody() {
 
   const [bench, setBench] = useState<BenchPoint[]>([])
   const [benchBusy, setBenchBusy] = useState(false)
+  const resumeAfterBench = useRef(false)
   const worker = useStreamingWorker<{ ns: number[]; theta: number }, { type: 'point'; point: BenchPoint } | { type: 'done' }>(
     () => new Worker(new URL('../workers/nbody.worker.ts', import.meta.url), { type: 'module' }),
     (m) => {
       if (m.type === 'point') setBench((b) => [...b, m.point])
-      else setBenchBusy(false)
+      else {
+        setBenchBusy(false)
+        setRunning(resumeAfterBench.current)
+      }
     },
   )
   const runBench = () => {
+    // Pause the live simulation so it does not compete with the worker for CPU time.
+    resumeAfterBench.current = running
+    setRunning(false)
     setBench([])
     setBenchBusy(true)
     worker.start({ ns: [250, 500, 1000, 2000, 4000, 8000, 16000], theta })

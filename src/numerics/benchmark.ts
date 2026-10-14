@@ -15,6 +15,7 @@ export interface BenchPoint {
 }
 
 function time(fn: () => void, reps: number): number {
+  fn() // warm-up: let the JIT compile the hot loops before timing
   const ts: number[] = []
   for (let r = 0; r < reps; r++) {
     const t0 = performance.now()

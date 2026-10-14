@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plot, type Series } from '../components/Plot.tsx'
 import { Tex } from '../components/Tex.tsx'
 import { Check, MethodSection, PageHeader, Panel, Readout, Segmented, Select, Slider } from '../components/ui.tsx'
@@ -6,7 +6,8 @@ import { fmt } from '../lib/format.ts'
 import { useAnimationLoop } from '../lib/hooks.ts'
 import { C, METHOD_COLOR } from '../lib/palette.ts'
 import { useWorkerJob } from '../lib/worker.ts'
-import { convergenceStudy, referenceSolution } from '../numerics/convergence.ts'
+import { referenceSolution, type ConvergenceResult } from '../numerics/convergence.ts'
+import type { ConvergenceRequest } from '../workers/convergence.worker.ts'
 import { dopri45, integrateFixed, METHODS, type MethodId } from '../numerics/ode.ts'
 import type { StiffRequest, StiffResponse } from '../numerics/stiff.ts'
 import { harmonic, kepler, pendulum, type ModelProblem } from '../numerics/systems.ts'
@@ -91,14 +92,13 @@ export default function IntegratorLab() {
     return ALL.filter((m) => enabled[m]).map((m) => runMethod(m, problem, dtEff, T, 10 ** tol, ref))
   }, [problem, T, dtEff, tol, enabled])
 
-  const convergence = useMemo(() => {
-    const Tc = problem.period
-    const ref = referenceSolution(problem, Tc)
-    return FIXED.map((m) => {
-      const base = m === 'euler' || m === 'backward-euler' ? 1600 : 100
-      return convergenceStudy(m, problem, Tc, [base, base * 2, base * 4, base * 8, base * 16], ref)
-    })
-  }, [problem])
+  const conv = useWorkerJob<ConvergenceRequest, ConvergenceResult[]>(() => new Worker(new URL('../workers/convergence.worker.ts', import.meta.url), { type: 'module' }))
+  const runConv = conv.run
+  useEffect(() => {
+    const id = window.setTimeout(() => runConv({ problem: problemId, ecc, theta0 }), 150)
+    return () => window.clearTimeout(id)
+  }, [problemId, ecc, theta0, runConv])
+  const convergence = conv.result ?? []
 
   useAnimationLoop((ms) => {
     setProgress((p) => {
@@ -164,12 +164,18 @@ export default function IntegratorLab() {
 
         <div className="grid min-w-0 gap-4 xl:grid-cols-2">
           <Panel title={problem.id === 'kepler' ? 'Orbit (x, y)' : 'Phase portrait (q, p)'}>
-            <Plot ariaLabel="Trajectories" series={trajSeries} equal height={300} xLabel={problem.id === 'kepler' ? 'x' : 'q'} yLabel={problem.id === 'kepler' ? 'y' : 'p'} />
+            <Plot
+              ariaLabel="Trajectories"
+              series={trajSeries}
+              equal
+              height={300}
+              xDomain={problem.id === 'kepler' ? [-(1 + ecc) - 0.3, 1 - ecc + 0.3] : undefined}
+              yDomain={problem.id === 'kepler' ? [-Math.sqrt(1 - ecc * ecc) - 0.3, Math.sqrt(1 - ecc * ecc) + 0.3] : undefined} xLabel={problem.id === 'kepler' ? 'x' : 'q'} yLabel={problem.id === 'kepler' ? 'y' : 'p'} />
           </Panel>
           <Panel title="Relative energy error |ΔE / E₀|">
             <Plot ariaLabel="Energy drift" series={energySeries} yLog height={300} xLabel="t" yLabel="|ΔE/E₀|" xDomain={[0, T]} />
           </Panel>
-          <Panel title="Measured convergence order (global error at t = one period)" className="xl:col-span-2">
+          <Panel title={`Measured convergence order (global error at t = 0.73 period)${conv.busy ? ' · computing in a worker…' : ''}`} className="xl:col-span-2">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
               <Plot ariaLabel="Convergence order log-log plot" series={convSeries} xLog yLog height={280} xLabel="step size h" yLabel="max-norm error" />
               <table className="h-fit w-full text-sm">

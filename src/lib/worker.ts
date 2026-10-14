@@ -13,7 +13,7 @@ export function useWorkerJob<Req, Res>(factory: () => Worker): { run: (req: Req)
 
   useEffect(() => () => workerRef.current?.terminate(), [])
 
-  const run = (req: Req) => {
+  const run = useCallback((req: Req) => {
     workerRef.current?.terminate()
     const w = factoryRef.current()
     workerRef.current = w
@@ -30,7 +30,7 @@ export function useWorkerJob<Req, Res>(factory: () => Worker): { run: (req: Req)
       setBusy(false)
     }
     w.postMessage(req)
-  }
+  }, [])
   return { run, result, busy, error }
 }
 

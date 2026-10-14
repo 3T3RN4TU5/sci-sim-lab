@@ -67,16 +67,41 @@ function LorenzPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const width = useElementWidth(wrapRef)
   const height = Math.min(460, Math.max(300, width * 0.6))
-  const view = useRef({ yaw: 0.6, pitch: -0.35, drag: null as null | { x: number; y: number; yaw: number; pitch: number } })
+  const view = useRef({ yaw: 0.25, pitch: -0.12, drag: null as null | { x: number; y: number; yaw: number; pitch: number } })
 
-  const sim = useRef<{ est: LyapunovEstimator; twin: Float64Array; twinStep: ReturnType<typeof makeStepper>; trailA: Float32Array; trailB: Float32Array; head: number; count: number; sep: number[]; sepT: number[] } | null>(null)
+  const sim = useRef<{
+    est: LyapunovEstimator
+    a: Float64Array
+    b: Float64Array
+    t: number
+    step: ReturnType<typeof makeStepper>
+    trailA: Float32Array
+    trailB: Float32Array
+    head: number
+    count: number
+    sep: number[]
+    sepT: number[]
+  } | null>(null)
   const [stats, setStats] = useState({ lambda: 0, t: 0, sep: 1e-9, sepT: [] as number[], sepY: [] as number[] })
 
   useEffect(() => {
     const p = lorenz(sigma, rho, beta)
+    // The Lyapunov estimator runs on its own trajectory (fast-forwarded); the two displayed
+    // trajectories start 1e-9 apart and are advanced in lock-step at animation speed.
     const est = new LyapunovEstimator(p, [1, 1, 1], { h: 0.005, renormEvery: 10 })
-    const twin = Float64Array.of(1 + 1e-9, 1, 1)
-    sim.current = { est, twin, twinStep: makeStepper('rk4', p), trailA: new Float32Array(TRAIL * 3), trailB: new Float32Array(TRAIL * 3), head: 0, count: 0, sep: [], sepT: [] }
+    sim.current = {
+      est,
+      a: Float64Array.of(-6, -8, 22),
+      b: Float64Array.of(-6 + 1e-9, -8, 22),
+      t: 0,
+      step: makeStepper('rk4', p),
+      trailA: new Float32Array(TRAIL * 3),
+      trailB: new Float32Array(TRAIL * 3),
+      head: 0,
+      count: 0,
+      sep: [],
+      sepT: [],
+    }
   }, [sigma, rho, beta])
 
   const draw = () => {
@@ -150,27 +175,28 @@ function LorenzPanel() {
   useAnimationLoop(() => {
     const s = sim.current
     if (!s) return
-    for (let k = 0; k < 4; k++) {
-      s.est.advance(1)
-      s.twinStep(s.est.t, s.twin, s.est.h)
+    for (let k = 0; k < 6; k++) {
+      s.step(s.t, s.a, 0.005)
+      s.step(s.t, s.b, 0.005)
+      s.t += 0.005
       const i = s.head * 3
-      s.trailA[i] = s.est.y[0]
-      s.trailA[i + 1] = s.est.y[1]
-      s.trailA[i + 2] = s.est.y[2]
-      s.trailB[i] = s.twin[0]
-      s.trailB[i + 1] = s.twin[1]
-      s.trailB[i + 2] = s.twin[2]
+      s.trailA[i] = s.a[0]
+      s.trailA[i + 1] = s.a[1]
+      s.trailA[i + 2] = s.a[2]
+      s.trailB[i] = s.b[0]
+      s.trailB[i + 1] = s.b[1]
+      s.trailB[i + 2] = s.b[2]
       s.head = (s.head + 1) % TRAIL
       s.count = Math.min(TRAIL, s.count + 1)
     }
     // Extra Lyapunov-only steps so the estimate converges faster than the animation.
-    s.est.advance(40)
-    const d = Math.hypot(s.twin[0] - s.est.y[0], s.twin[1] - s.est.y[1], s.twin[2] - s.est.y[2])
+    s.est.advance(200)
+    const d = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1], s.b[2] - s.a[2])
     draw()
     const now = performance.now()
     if (now - lastStats.current > 200) {
       lastStats.current = now
-      s.sepT.push(s.est.t)
+      s.sepT.push(s.t)
       s.sep.push(d)
       setStats({ lambda: s.est.exponent, t: s.est.t, sep: d, sepT: s.sepT.slice(), sepY: s.sep.slice() })
     }
@@ -215,7 +241,7 @@ function LorenzPanel() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <Readout label="λ₁ (Benettin)" value={fmtFixed(stats.lambda, 4)} tone={rho === 28 && sigma === 10 && Math.abs(stats.lambda - 0.906) < 0.05 ? 'good' : undefined} />
-            <Readout label="Time t" value={fmtFixed(stats.t, 1)} />
+            <Readout label="Estimator time t" value={fmtFixed(stats.t, 0)} />
             <Readout label="|δ| blue vs orange" value={fmt(stats.sep)} />
             <Readout label="Literature λ₁" value="0.9056" />
           </div>
@@ -228,7 +254,7 @@ function LorenzPanel() {
         </div>
       </div>
       <div className="mt-3">
-        <Plot ariaLabel="Separation of the twin trajectories" series={sepSeries} yLog height={200} xLabel="t" yLabel="|δ|" yDomain={[1e-10, 100]} />
+        <Plot ariaLabel="Separation of the twin trajectories" series={sepSeries} yLog height={200} xLabel="t (displayed trajectories)" yLabel="|δ|" yDomain={[1e-10, 100]} />
       </div>
     </Panel>
   )

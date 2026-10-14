@@ -108,6 +108,11 @@ function seedHeat(heat: Heat2D, kind: 'blobs' | 'mode'): void {
   heat.t = 0
   if (kind === 'mode') heat.setMode(1, 1)
   else {
+    // Dirichlet walls: hot (+1) on the left, cold (−1) on the right, insulating-free 0 top/bottom.
+    for (let j = 1; j < HN - 1; j++) {
+      heat.u[j * HN] = 1
+      heat.u[j * HN + HN - 1] = -1
+    }
     heat.paint(40, 50, 10, 1)
     heat.paint(85, 80, 14, -0.9)
     heat.paint(90, 30, 6, 1)
@@ -126,8 +131,8 @@ function HeatPanel() {
   const sim = useRef<Heat2D | null>(null)
   const history = useRef<{ t: number[]; a: number[] }>({ t: [], a: [] })
   const [scheme, setScheme] = useState<HeatScheme>('adi')
-  const [mult, setMult] = useState(8)
-  const [stepsPerFrame, setStepsPerFrame] = useState(2)
+  const [mult, setMult] = useState(2)
+  const [stepsPerFrame, setStepsPerFrame] = useState(1)
   const [cmap, setCmap] = useState<ColormapId>('coolwarm')
   const [running, setRunning] = useState(true)
   const [modeTest, setModeTest] = useState(false)
@@ -203,7 +208,7 @@ function HeatPanel() {
           <Select<ColormapId> label="Colormap" value={cmap} onChange={setCmap} options={CMAPS} />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" className="btn" onClick={() => reset('blobs')}>
-              Hot/cold blobs
+              Blobs + hot/cold walls
             </button>
             <button type="button" className="btn" onClick={() => reset('mode')}>
               Fourier-mode test
@@ -321,7 +326,7 @@ function WavePanel() {
 
   const render = () => {
     const wave = getWave()
-    field.current?.render(wave.u, cmap, -1, 1, wave.wall)
+    field.current?.render(wave.u, cmap, -0.5, 0.5, wave.wall)
     field.current?.overlay((ctx, cell) => {
       for (const s of wave.sources) {
         ctx.strokeStyle = '#f8fafc'
@@ -404,7 +409,7 @@ function WavePanel() {
           <div ref={ref} className="space-y-2">
             <FieldCanvas ref={field} n={WN} size={size} label="Wave field" onPointer={onPointer} />
             <div style={{ maxWidth: size }}>
-              <Colorbar cmap={cmap} lo="−1" hi="+1" />
+              <Colorbar cmap={cmap} lo="−0.5" hi="+0.5" />
             </div>
           </div>
           <div className="space-y-2">

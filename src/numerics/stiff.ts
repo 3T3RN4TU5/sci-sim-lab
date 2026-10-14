@@ -70,7 +70,7 @@ export function runStiffDemo(req: StiffRequest): StiffResponse {
       rejected: 0,
       fevals: id === 'rk4' ? 4 * steps : NaN,
       ms: performance.now() - t0,
-      status: diverged >= 0 ? `diverged at t ≈ ${diverged.toPrecision(3)}` : 'ok',
+      status: diverged >= 0 ? (id === 'rk4' ? `diverged at t ≈ ${diverged.toPrecision(3)}` : `Newton failed at t ≈ ${diverged.toPrecision(3)} (step too large)`) : 'ok',
       t,
       y,
     })

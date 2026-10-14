@@ -103,7 +103,7 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
 export function Readout({ label, value, tone }: { label: ReactNode; value: ReactNode; tone?: 'good' | 'bad' | 'warn' }) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-slate-950/50 px-3 py-2">
-      <div className="text-[11px] tracking-wide text-slate-400 uppercase">{label}</div>
+      <div className="text-[11px] font-medium tracking-wide text-slate-400">{label}</div>
       <div className={cn('font-mono text-sm tabular-nums', tone === 'good' ? 'text-emerald-300' : tone === 'bad' ? 'text-rose-300' : tone === 'warn' ? 'text-amber-300' : 'text-slate-100')}>
         {value}
       </div>

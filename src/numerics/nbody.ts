@@ -468,10 +468,10 @@ export function galaxies(nPerGalaxy = 1000, seed = 7): Preset {
   const b = createBodies(n)
   const G = 1
   const mStar = 0.1 / nPerGalaxy
-  addDisk(b, 0, nPerGalaxy, -1.6, -0.55, 0.32, 0.06, 1, mStar, 0.15, 1.0, 1, rng, G)
-  addDisk(b, nPerGalaxy + 1, nPerGalaxy, 1.6, 0.55, -0.32, -0.06, 1, mStar, 0.15, 0.9, -1, rng, G)
+  addDisk(b, 0, nPerGalaxy, -2.0, -0.6, 0.26, 0.05, 1, mStar, 0.15, 1.0, 1, rng, G)
+  addDisk(b, nPerGalaxy + 1, nPerGalaxy, 2.0, 0.6, -0.26, -0.05, 1, mStar, 0.15, 0.9, -1, rng, G)
   toComFrame(b)
-  return { id: 'galaxies', name: PRESET_NAMES.galaxies, bodies: b, params: { G, eps: 0.04 }, dt: 0.004, view: 3, heavy: [0, nPerGalaxy + 1] }
+  return { id: 'galaxies', name: PRESET_NAMES.galaxies, bodies: b, params: { G, eps: 0.04 }, dt: 0.004, view: 3.4, heavy: [0, nPerGalaxy + 1] }
 }
 
 export function solar(asteroids = 600, seed = 3): Preset {
