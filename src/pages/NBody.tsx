@@ -48,7 +48,6 @@ export default function NBody() {
     const sim = new NBodySim(cloneBodies(preset.bodies), { G: preset.params.G, eps: preset.params.eps, theta: 0.5, method: 'barnes-hut', quadrupole: true })
     const e = energy(sim.b, preset.params.G, preset.params.eps).total
     simRef.current = { sim, preset, E0: e, L0: momentum(sim.b).L, frame: 0 }
-    setZoom(1)
   }, [presetId, n, seed])
 
   // Live parameter changes apply without resetting the bodies.
@@ -203,6 +202,7 @@ export default function NBody() {
               onChange={(v) => {
                 setPresetId(v)
                 setN(DEFAULT_N[v])
+                setZoom(1)
               }}
               options={(Object.keys(PRESET_NAMES) as PresetId[]).map((id) => ({ value: id, label: PRESET_NAMES[id] }))}
             />

@@ -1,8 +1,6 @@
 import { useId, type ReactNode } from 'react'
+import { cn } from '../lib/utils.ts'
 
-export function cn(...parts: (string | false | null | undefined)[]): string {
-  return parts.filter(Boolean).join(' ')
-}
 
 export function Slider({
   label,

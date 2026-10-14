@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { FieldCanvas, type FieldCanvasHandle } from '../components/FieldCanvas.tsx'
 import { Plot } from '../components/Plot.tsx'
 import { Tex } from '../components/Tex.tsx'
@@ -100,69 +100,91 @@ export default function Pde() {
 // ─── Heat ──────────────────────────────────────────────────────────────────
 
 const HN = 128
+const HEAT_DX = 1 / (HN - 1)
+const HEAT_DT_MAX = 0.25 * HEAT_DX * HEAT_DX // FTCS limit for α = 1
+
+function seedHeat(heat: Heat2D, kind: 'blobs' | 'mode'): void {
+  heat.u.fill(0)
+  heat.t = 0
+  if (kind === 'mode') heat.setMode(1, 1)
+  else {
+    heat.paint(40, 50, 10, 1)
+    heat.paint(85, 80, 14, -0.9)
+    heat.paint(90, 30, 6, 1)
+  }
+}
+
+function modeAmplitude(heat: Heat2D): number {
+  let s = 0
+  for (let j = 0; j < HN; j++) for (let i = 0; i < HN; i++) s += heat.u[j * HN + i] * Math.sin((Math.PI * i) / (HN - 1)) * Math.sin((Math.PI * j) / (HN - 1))
+  return 4 * s * heat.dx * heat.dx
+}
 
 function HeatPanel() {
   const { ref, size } = useSquareSize()
   const field = useRef<FieldCanvasHandle>(null)
-  const heat = useMemo(() => new Heat2D(HN, 1), [])
+  const sim = useRef<Heat2D | null>(null)
+  const history = useRef<{ t: number[]; a: number[] }>({ t: [], a: [] })
   const [scheme, setScheme] = useState<HeatScheme>('adi')
   const [mult, setMult] = useState(8)
   const [stepsPerFrame, setStepsPerFrame] = useState(2)
   const [cmap, setCmap] = useState<ColormapId>('coolwarm')
   const [running, setRunning] = useState(true)
   const [modeTest, setModeTest] = useState(false)
-  const [, force] = useState(0)
-  const history = useRef<{ t: number[]; a: number[] }>({ t: [], a: [] })
-  const dt = mult * heat.maxStableDt()
-  const r = heat.ratio(dt)
+  const [view, setView] = useState({ t: 0, maxAbs: 1, histT: [] as number[], histA: [] as number[] })
+  const dt = mult * HEAT_DT_MAX
+  const r = dt / (HEAT_DX * HEAT_DX)
   const unstable = scheme === 'ftcs' && r > 0.25
 
-  const reset = (kind: 'blobs' | 'mode') => {
-    heat.u.fill(0)
-    heat.t = 0
-    history.current = { t: [], a: [] }
-    if (kind === 'mode') {
-      heat.setMode(1, 1)
-      setModeTest(true)
-    } else {
-      setModeTest(false)
-      heat.paint(40, 50, 10, 1)
-      heat.paint(85, 80, 14, -0.9)
-      heat.paint(90, 30, 6, 1)
+  const getHeat = () => {
+    if (!sim.current) {
+      sim.current = new Heat2D(HN, 1)
+      seedHeat(sim.current, 'blobs')
     }
-    force((v) => v + 1)
+    return sim.current
   }
-  useEffect(() => reset('blobs'), [])
+  const publish = (heat: Heat2D) => setView({ t: heat.t, maxAbs: heat.maxAbs(), histT: history.current.t.slice(), histA: history.current.a.slice() })
 
-  const amplitude = () => {
-    let s = 0
-    for (let j = 0; j < HN; j++) for (let i = 0; i < HN; i++) s += heat.u[j * HN + i] * Math.sin((Math.PI * i) / (HN - 1)) * Math.sin((Math.PI * j) / (HN - 1))
-    return 4 * s * heat.dx * heat.dx
+  const reset = (kind: 'blobs' | 'mode') => {
+    const heat = getHeat()
+    seedHeat(heat, kind)
+    history.current = { t: [], a: [] }
+    setModeTest(kind === 'mode')
+    if (kind === 'mode') {
+      history.current.t.push(0)
+      history.current.a.push(modeAmplitude(heat))
+    }
+    field.current?.render(heat.u, cmap, -1, 1)
+    publish(heat)
   }
 
   useAnimationLoop(() => {
-    if (!running) return
+    const heat = getHeat()
     for (let k = 0; k < stepsPerFrame; k++) heat.step(dt, scheme)
-    if (modeTest && history.current.t.length < 2000) {
+    if (modeTest && history.current.t.length < 3000) {
       history.current.t.push(heat.t)
-      history.current.a.push(amplitude())
+      history.current.a.push(modeAmplitude(heat))
     }
     if (!(heat.maxAbs() < 1e6)) setRunning(false)
     field.current?.render(heat.u, cmap, -1, 1)
-    force((v) => (v + 1) % 1e6)
+    publish(heat)
   }, running)
 
-  useEffect(() => field.current?.render(heat.u, cmap, -1, 1))
+  useEffect(() => {
+    field.current?.render(getHeat().u, cmap, -1, 1)
+  })
 
   const paint = (gi: number, gj: number, e: PointerEvent, phase: string) => {
     if (phase === 'up') return
-    heat.paint(gi, gj, 5, e.shiftKey || e.button === 2 ? -0.25 : 0.25)
+    const heat = getHeat()
+    heat.paint(gi, gj, 5, e.shiftKey ? -0.25 : 0.25)
     setModeTest(false)
     field.current?.render(heat.u, cmap, -1, 1)
   }
 
-  const exactA = heatModeAmplitude(1, heat.t)
-  const measured = modeTest ? history.current.a[history.current.a.length - 1] ?? 1 : NaN
+  const exactA = heatModeAmplitude(1, view.t)
+  const measured = view.histA[view.histA.length - 1] ?? NaN
+  const relErr = Math.abs(measured - exactA) / exactA
   return (
     <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <Panel title="Heat equation controls">
@@ -205,13 +227,13 @@ function HeatPanel() {
             <div className="grid h-fit grid-cols-2 gap-2 xl:grid-cols-1">
               <Readout label="Mesh ratio r = αΔt/Δx²" value={fmtFixed(r, 3)} tone={unstable ? 'bad' : 'good'} />
               <Readout label="FTCS stability (r ≤ 1/4)" value={scheme === 'adi' ? 'ADI: unconditionally stable' : unstable ? 'VIOLATED — will blow up' : 'satisfied'} tone={unstable ? 'bad' : 'good'} />
-              <Readout label="Time t" value={fmt(heat.t, 4)} />
-              <Readout label="max |u|" value={fmt(heat.maxAbs())} tone={heat.maxAbs() > 2 ? 'bad' : undefined} />
+              <Readout label="Time t" value={fmt(view.t, 4)} />
+              <Readout label="max |u|" value={fmt(view.maxAbs)} tone={view.maxAbs > 2 ? 'bad' : undefined} />
               {modeTest && (
                 <>
                   <Readout label="Mode amplitude (measured)" value={fmt(measured, 6)} />
                   <Readout label="Analytic e^{−2π²t}" value={fmt(exactA, 6)} />
-                  <Readout label="Relative error" value={fmt(Math.abs(measured - exactA) / exactA)} tone={Math.abs(measured - exactA) / exactA < 1e-2 ? 'good' : 'bad'} />
+                  <Readout label="Relative error" value={fmt(relErr)} tone={relErr < 1e-2 ? 'good' : 'bad'} />
                 </>
               )}
             </div>
@@ -226,8 +248,8 @@ function HeatPanel() {
               xLabel="t"
               yLabel="amplitude"
               series={[
-                { x: history.current.t, y: history.current.t.map((t) => heatModeAmplitude(1, t)), color: C.muted, dash: [5, 4], label: 'analytic', width: 1.5 },
-                { x: history.current.t, y: history.current.a, color: scheme === 'adi' ? C.aqua : C.orange, label: scheme === 'adi' ? 'ADI' : 'FTCS' },
+                { x: view.histT, y: view.histT.map((t) => heatModeAmplitude(1, t)), color: C.muted, dash: [5, 4], label: 'analytic', width: 1.5 },
+                { x: view.histT, y: view.histA, color: scheme === 'adi' ? C.aqua : C.orange, label: scheme === 'adi' ? 'ADI' : 'FTCS' },
               ]}
             />
           </Panel>
@@ -243,10 +265,27 @@ const WN = 180
 
 type WavePreset = 'two' | 'slit' | 'one'
 
+function setupWave(wave: Wave2D, preset: WavePreset, omega: number): void {
+  wave.clearField()
+  wave.wall.fill(0)
+  if (preset === 'two') {
+    wave.sources = [
+      { i: 70, j: 90, omega, amp: 1 },
+      { i: 110, j: 90, omega, amp: 1 },
+    ]
+  } else if (preset === 'slit') {
+    for (let i = 0; i < WN; i++) if (Math.abs(i - 75) > 4 && Math.abs(i - 105) > 4) for (let j = 98; j < 102; j++) wave.wall[j * WN + i] = 1
+    wave.sources = [{ i: 90, j: 150, omega, amp: 1.5 }]
+  } else {
+    wave.sources = []
+    wave.pulse(90, 90, 5, 2)
+  }
+}
+
 function WavePanel() {
   const { ref, size } = useSquareSize()
   const field = useRef<FieldCanvasHandle>(null)
-  const wave = useMemo(() => new Wave2D(WN), [])
+  const sim = useRef<Wave2D | null>(null)
   const [boundary, setBoundary] = useState<WaveBoundary>('absorb')
   const [courant, setCourant] = useState(0.5)
   const [omega, setOmega] = useState(0.25)
@@ -254,37 +293,34 @@ function WavePanel() {
   const [cmap, setCmap] = useState<ColormapId>('coolwarm')
   const [preset, setPreset] = useState<WavePreset>('two')
   const [running, setRunning] = useState(true)
-  const [, force] = useState(0)
+  const [view, setView] = useState({ steps: 0, histT: [] as number[], histE: [] as number[] })
   const drag = useRef<WaveSource | null>(null)
   const energyHist = useRef<{ t: number[]; e: number[] }>({ t: [], e: [] })
 
-  useEffect(() => {
-    wave.clearField()
-    wave.wall.fill(0)
-    energyHist.current = { t: [], e: [] }
-    if (preset === 'two') {
-      wave.sources = [
-        { i: 70, j: 90, omega, amp: 1 },
-        { i: 110, j: 90, omega, amp: 1 },
-      ]
-    } else if (preset === 'slit') {
-      for (let i = 0; i < WN; i++) if (Math.abs(i - 75) > 4 && Math.abs(i - 105) > 4) for (let j = 98; j < 102; j++) wave.wall[j * WN + i] = 1
-      wave.sources = [{ i: 90, j: 150, omega, amp: 1.5 }]
-    } else {
-      wave.sources = []
-      wave.pulse(90, 90, 5, 2)
+  const getWave = () => {
+    if (!sim.current) {
+      sim.current = new Wave2D(WN)
+      setupWave(sim.current, 'two', 0.25)
     }
-    force((v) => v + 1)
-  }, [preset, wave])
+    return sim.current
+  }
+
+  const choosePreset = (p: WavePreset) => {
+    setPreset(p)
+    setupWave(getWave(), p, omega)
+    energyHist.current = { t: [], e: [] }
+  }
 
   useEffect(() => {
+    const wave = getWave()
     wave.boundary = boundary
     wave.courant = courant
     wave.damping = damping
     for (const s of wave.sources) s.omega = omega
-  }, [boundary, courant, damping, omega, wave])
+  }, [boundary, courant, damping, omega])
 
   const render = () => {
+    const wave = getWave()
     field.current?.render(wave.u, cmap, -1, 1, wave.wall)
     field.current?.overlay((ctx, cell) => {
       for (const s of wave.sources) {
@@ -298,9 +334,10 @@ function WavePanel() {
   }
 
   useAnimationLoop(() => {
+    const wave = getWave()
     for (let k = 0; k < 2; k++) wave.step()
     const h = energyHist.current
-    if (wave.steps % 10 === 0 || wave.steps % 10 === 1) {
+    if (wave.steps % 10 < 2) {
       h.t.push(wave.steps)
       h.e.push(wave.energy())
       if (h.t.length > 600) {
@@ -310,17 +347,17 @@ function WavePanel() {
     }
     if (!(Math.abs(wave.u[(WN >> 1) * WN + (WN >> 1)]) < 1e6)) setRunning(false)
     render()
-    force((v) => (v + 1) % 1e6)
+    setView({ steps: wave.steps, histT: h.t.slice(), histE: h.e.slice() })
   }, running)
   useEffect(render)
 
   const onPointer = (gi: number, gj: number, e: PointerEvent, phase: 'down' | 'move' | 'up') => {
+    const wave = getWave()
     if (phase === 'down') {
       const hit = wave.sources.find((s) => Math.hypot(s.i - gi, s.j - gj) < 8)
       if (hit) drag.current = hit
-      else if (e.shiftKey) {
-        wave.sources.push({ i: Math.round(gi), j: Math.round(gj), omega, amp: 1 })
-      } else wave.pulse(gi, gj, 3, 1.5)
+      else if (e.shiftKey) wave.sources.push({ i: Math.round(gi), j: Math.round(gj), omega, amp: 1 })
+      else wave.pulse(gi, gj, 3, 1.5)
     } else if (phase === 'move' && drag.current) {
       drag.current.i = Math.max(1, Math.min(WN - 2, Math.round(gi)))
       drag.current.j = Math.max(1, Math.min(WN - 2, Math.round(gj)))
@@ -336,7 +373,7 @@ function WavePanel() {
           <Select<WavePreset>
             label="Scenario"
             value={preset}
-            onChange={setPreset}
+            onChange={choosePreset}
             options={[
               { value: 'two', label: 'Two-source interference' },
               { value: 'slit', label: 'Double slit' },
@@ -372,9 +409,9 @@ function WavePanel() {
           </div>
           <div className="space-y-2">
             <Readout label="Courant number" value={fmtFixed(courant, 2)} tone={unstable ? 'bad' : 'good'} />
-            <Readout label="Time steps" value={wave.steps.toLocaleString()} />
+            <Readout label="Time steps" value={view.steps.toLocaleString()} />
             <Readout label="Wavelength (cells)" value={fmtFixed((2 * Math.PI * courant) / omega, 1)} />
-            <Plot ariaLabel="Discrete wave energy" series={[{ x: energyHist.current.t, y: energyHist.current.e, color: C.violet, label: 'energy' }]} height={170} xLabel="step" yLabel="E" />
+            <Plot ariaLabel="Discrete wave energy" series={[{ x: view.histT, y: view.histE, color: C.violet, label: 'energy' }]} height={170} xLabel="step" yLabel="E" />
           </div>
         </div>
       </Panel>
@@ -389,36 +426,44 @@ const GN = 160
 function GrayScottPanel() {
   const { ref, size } = useSquareSize()
   const field = useRef<FieldCanvasHandle>(null)
-  const gs = useMemo(() => {
-    const g = new GrayScott(GN)
-    g.reset(1)
-    return g
-  }, [])
+  const sim = useRef<GrayScott | null>(null)
   const [presetId, setPresetId] = useState('coral')
   const [F, setF] = useState(0.0545)
   const [k, setK] = useState(0.062)
   const [iters, setIters] = useState(12)
   const [cmap, setCmap] = useState<ColormapId>('viridis')
   const [running, setRunning] = useState(true)
-  const [ms, setMs] = useState(0)
+  const [view, setView] = useState({ ms: 0, steps: 0 })
   const lastT = useRef(0)
 
+  const getGs = () => {
+    if (!sim.current) {
+      sim.current = new GrayScott(GN)
+      sim.current.reset(1)
+    }
+    return sim.current
+  }
+
   useEffect(() => {
+    const gs = getGs()
     gs.F = F
     gs.k = k
-  }, [F, k, gs])
+  }, [F, k])
 
   useAnimationLoop(() => {
+    const gs = getGs()
     const t0 = performance.now()
     gs.step(iters)
     const dt = performance.now() - t0
     field.current?.render(gs.v, cmap, 0, 0.42)
     if (t0 - lastT.current > 500) {
       lastT.current = t0
-      setMs(dt)
+      setView({ ms: dt, steps: gs.steps })
     }
   }, running)
-  useEffect(() => field.current?.render(gs.v, cmap, 0, 0.42))
+  useEffect(() => {
+    field.current?.render(getGs().v, cmap, 0, 0.42)
+  })
 
   return (
     <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -432,7 +477,7 @@ function GrayScottPanel() {
               setPresetId(id)
               setF(p.F)
               setK(p.k)
-              gs.reset(Math.floor(Math.random() * 1000))
+              getGs().reset(Math.floor(Math.random() * 1000))
             }}
             options={GRAY_SCOTT_PRESETS.map((p) => ({ value: p.id, label: p.name }))}
           />
@@ -444,7 +489,7 @@ function GrayScottPanel() {
             <button type="button" className="btn" onClick={() => setRunning((v) => !v)}>
               {running ? 'Pause' : 'Run'}
             </button>
-            <button type="button" className="btn" onClick={() => gs.reset(Math.floor(Math.random() * 1000))}>
+            <button type="button" className="btn" onClick={() => getGs().reset(Math.floor(Math.random() * 1000))}>
               Reseed
             </button>
           </div>
@@ -454,16 +499,16 @@ function GrayScottPanel() {
       <Panel>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
           <div ref={ref} className="space-y-2">
-            <FieldCanvas ref={field} n={GN} size={size} label="Gray–Scott concentration v" onPointer={(gi, gj, _e, phase) => phase !== 'up' && gs.paint(gi, gj, 4)} />
+            <FieldCanvas ref={field} n={GN} size={size} label="Gray–Scott concentration v" onPointer={(gi, gj, _e, phase) => phase !== 'up' && getGs().paint(gi, gj, 4)} />
             <div style={{ maxWidth: size }}>
               <Colorbar cmap={cmap} lo="v = 0" hi="0.42" />
             </div>
           </div>
           <div className="space-y-2">
             <Readout label="Grid" value={`${GN} × ${GN}, periodic`} />
-            <Readout label="Iterations" value={gs.steps.toLocaleString()} />
-            <Readout label="CPU ms / frame" value={fmtFixed(ms, 1)} />
-            <Readout label="Cell updates / s" value={ms > 0 ? fmt((GN * GN * iters * 1000) / ms, 3) : '—'} />
+            <Readout label="Iterations" value={view.steps.toLocaleString()} />
+            <Readout label="CPU ms / frame" value={fmtFixed(view.ms, 1)} />
+            <Readout label="Cell updates / s" value={view.ms > 0 ? fmt((GN * GN * iters * 1000) / view.ms, 3) : '—'} />
           </div>
         </div>
       </Panel>

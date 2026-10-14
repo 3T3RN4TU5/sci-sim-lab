@@ -76,7 +76,7 @@ function IsingSection() {
   const width = useElementWidth(wrapRef)
   const size = Math.max(200, Math.min(460, width))
   const hist = useRef<{ i: number[]; m: number[]; e: number[] }>({ i: [], m: [], e: [] })
-  const [live, setLive] = useState({ m: 0, e: 0 })
+  const [live, setLive] = useState({ m: 0, e: 0, hi: [] as number[], hm: [] as number[], he: [] as number[] })
   const lastT = useRef(0)
 
   useEffect(() => model.setTemperature(T), [T, model])
@@ -121,7 +121,7 @@ function IsingSection() {
     const now = performance.now()
     if (now - lastT.current > 150) {
       lastT.current = now
-      setLive({ m: model.magnetization / model.N, e: model.energy / model.N })
+      setLive({ m: model.magnetization / model.N, e: model.energy / model.N, hi: h.i.slice(), hm: h.m.slice(), he: h.e.slice() })
     }
   }, running)
   useEffect(draw)
@@ -207,8 +207,8 @@ function IsingSection() {
                 xLabel="sweep"
                 yDomain={[-2.05, 1.05]}
                 series={[
-                  { x: hist.current.i, y: hist.current.m, color: C.blue, label: 'm (magnetisation / spin)' },
-                  { x: hist.current.i, y: hist.current.e, color: C.orange, label: 'e (energy / spin)' },
+                  { x: live.hi, y: live.hm, color: C.blue, label: 'm (magnetisation / spin)' },
+                  { x: live.hi, y: live.he, color: C.orange, label: 'e (energy / spin)' },
                 ]}
               />
             </div>
@@ -278,12 +278,11 @@ function PiSection() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const width = useElementWidth(wrapRef)
   const size = Math.max(160, Math.min(260, width / 2 - 8))
-  const state = useRef({ rng: new Rng(9), n: 0, hits: 0, trace: [] as number[], traceN: [] as number[] })
+  const state = useRef({ rng: new Rng(9), n: 0, hits: 0 })
   const [running, setRunning] = useState(true)
-  const [, force] = useState(0)
+  const [counts, setCounts] = useState({ n: 0, hits: 0 })
   const [scaling, setScaling] = useState<ErrorScaling | null>(null)
-  const worker = useStreamingWorker<StatRequest, StatMsg>(makeWorker, (m) => m.kind === 'pi' && setScaling(m.result))
-  useEffect(() => worker.start({ kind: 'pi' }), []) // eslint-disable-line
+  useStreamingWorker<StatRequest, StatMsg>(makeWorker, (m) => m.kind === 'pi' && setScaling(m.result), { kind: 'pi' })
 
   useEffect(() => {
     const ctx = canvasRef.current && fitCanvas(canvasRef.current, size, size)
@@ -312,12 +311,10 @@ function PiSection() {
         ctx.fillRect(x * size - 0.75, size - y * size - 0.75, 1.5, 1.5)
       }
     }
-    s.traceN.push(s.n)
-    s.trace.push(Math.abs((4 * s.hits) / s.n - Math.PI))
-    force((v) => (v + 1) % 1e6)
+    setCounts({ n: s.n, hits: s.hits })
   }, running)
 
-  const s = state.current
+  const s = counts
   const est = s.n ? (4 * s.hits) / s.n : 0
   const scaleSeries: Series[] = scaling
     ? [
@@ -363,7 +360,7 @@ function WalkSection() {
   const walkers = useMemo(() => new RandomWalkers(3000, seed), [seed])
   const msd = useRef<{ t: number[]; m: number[] }>({ t: [], m: [] })
   const [running, setRunning] = useState(true)
-  const [, force] = useState(0)
+  const [m, setM] = useState<{ steps: number; t: number[]; m: number[] }>({ steps: 0, t: [], m: [] })
   useEffect(() => {
     msd.current = { t: [], m: [] }
   }, [walkers])
@@ -386,17 +383,15 @@ function WalkSection() {
       ctx.fillStyle = 'rgba(144,133,233,0.7)'
       for (let i = 0; i < walkers.count; i++) ctx.fillRect(size / 2 + walkers.x[i] * sc - 1, size / 2 + walkers.y[i] * sc - 1, 2, 2)
     }
-    force((v) => (v + 1) % 1e6)
+    setM({ steps: walkers.t, t: msd.current.t.slice(), m: msd.current.m.slice() })
   }, running)
-
-  const m = msd.current
   const slope = m.t.length > 10 ? m.m[m.m.length - 1] / m.t[m.t.length - 1] : NaN
   return (
     <Panel title="Random walk diffusion (3000 walkers)">
       <div ref={wrapRef} className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
         <canvas ref={canvasRef} className="block rounded-xl" aria-label="Random walkers spreading from the origin; ring at radius √t" />
         <div className="grid h-fit grid-cols-1 gap-2">
-          <Readout label="Steps t" value={walkers.t.toLocaleString()} />
+          <Readout label="Steps t" value={m.steps.toLocaleString()} />
           <Readout label="MSD ⟨r²⟩" value={fmtFixed(m.m[m.m.length - 1] ?? 0, 1)} />
           <Readout label="MSD / t (theory 1)" value={fmtFixed(slope, 4)} tone={Math.abs(slope - 1) < 0.05 ? 'good' : undefined} />
           <div className="grid grid-cols-2 gap-2">

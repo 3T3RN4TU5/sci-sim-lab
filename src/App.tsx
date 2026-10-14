@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, type ComponentType, type LazyExoticComponent } from 'react'
-import { cn } from './components/ui.tsx'
+import { cn } from './lib/utils.ts'
 import { REPO_URL, ROUTES } from './config.ts'
 import { useHashRoute } from './lib/hooks.ts'
 import Home from './pages/Home.tsx'
