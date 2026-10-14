@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: dark;
+  /* Categorical series palette (validated for CVD separation on the dark surface). */
+  --s-blue: #3987e5;
+  --s-orange: #d95926;
+  --s-aqua: #199e70;
+  --s-yellow: #c98500;
+  --s-magenta: #d55181;
+  --s-violet: #9085e9;
+  --s-red: #e66767;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-200 antialiased;
+    background-image:
+      radial-gradient(60rem 30rem at 15% -10%, rgb(57 135 229 / 0.09), transparent 70%),
+      radial-gradient(50rem 28rem at 95% 0%, rgb(144 133 233 / 0.1), transparent 70%);
+    background-repeat: no-repeat;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-sky-400);
+    outline-offset: 2px;
+  }
+
+  option {
+    background-color: var(--color-slate-900);
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/[0.07] bg-slate-900/70 shadow-xl shadow-black/20;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-wider text-slate-400 uppercase;
+  }
+
+  .select {
+    @apply w-full cursor-pointer appearance-none rounded-lg border border-white/10 bg-slate-900 py-1.5 pr-9 pl-3 text-sm text-slate-100 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-sky-400/40 bg-sky-500/15 text-sky-100 hover:bg-sky-500/25;
+  }
+
+  /* Range slider with a filled track (--fill is set inline, 0–100%). */
+  .range {
+    @apply h-5 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-50;
+    --fill: 50%;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: linear-gradient(to right, var(--color-sky-400) var(--fill), rgb(255 255 255 / 0.1) var(--fill));
+  }
+  .range::-moz-range-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: rgb(255 255 255 / 0.1);
+  }
+  .range::-moz-range-progress {
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--color-sky-400);
+  }
+  .range::-webkit-slider-thumb {
+    appearance: none;
+    margin-top: -5px;
+    height: 16px;
+    width: 16px;
+    border-radius: 9999px;
+    border: 3px solid var(--color-slate-950);
+    background: var(--color-sky-300);
+    box-shadow: 0 0 0 1px rgb(56 189 248 / 0.6);
+  }
+  .range::-moz-range-thumb {
+    height: 12px;
+    width: 12px;
+    border-radius: 9999px;
+    border: 3px solid var(--color-slate-950);
+    background: var(--color-sky-300);
+  }
+  .range:focus-visible {
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+
+  .prose-method p {
+    @apply my-2 leading-relaxed text-slate-300;
+  }
+  .prose-method ul {
+    @apply my-2 list-disc space-y-1 pl-5 text-slate-300;
+  }
+  .prose-method .katex-display {
+    @apply my-3 overflow-x-auto overflow-y-hidden py-1;
+  }
+}
+
+.sim-canvas {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
