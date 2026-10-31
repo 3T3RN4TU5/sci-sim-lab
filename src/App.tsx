@@ -65,7 +65,7 @@ export default function App() {
         )}
       </main>
       <footer className="border-t border-white/[0.06] py-5 text-center text-xs text-slate-500">
-        Built by <a className="text-slate-300 hover:text-white" href="https://github.com/Jeevan2410" target="_blank" rel="noreferrer">Jeevan</a> · All numerics written from scratch in TypeScript ·{' '}
+        Built by <a className="text-slate-300 hover:text-white" href="https://github.com/3T3RN4TU5" target="_blank" rel="noreferrer">Jeevan</a> · All numerics written from scratch in TypeScript ·{' '}
         <a className="text-slate-300 hover:text-white" href={REPO_URL} target="_blank" rel="noreferrer">
           Source &amp; verification suite
         </a>

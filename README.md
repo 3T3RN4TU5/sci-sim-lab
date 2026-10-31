@@ -203,6 +203,6 @@ CI (GitHub Actions, Node 22) runs `npm ci`, lint, test and build on every push.
 
 ## Author
 
-**Jeevan** · [github.com/Jeevan2410](https://github.com/Jeevan2410)
+**Jeevan** · [github.com/3T3RN4TU5](https://github.com/3T3RN4TU5)
 
 MIT licensed.

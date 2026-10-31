@@ -1,4 +1,4 @@
-export const REPO_URL = 'https://github.com/Jeevan2410/sci-sim-lab'
+export const REPO_URL = 'https://github.com/3T3RN4TU5/sci-sim-lab'
 export const LIVE_URL = 'https://sci-sim-lab-jeevan.vercel.app'
 
 export interface RouteInfo {
