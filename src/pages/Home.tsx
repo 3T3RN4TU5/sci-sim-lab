@@ -31,7 +31,7 @@ export default function Home() {
           <a href="#/integrators" className="btn btn-primary px-4 py-2">
             Open the integrator lab
           </a>
-          <a href="https://github.com/Jeevan2410/sci-sim-lab" target="_blank" rel="noreferrer" className="btn px-4 py-2">
+          <a href="https://github.com/3T3RN4TU5/sci-sim-lab" target="_blank" rel="noreferrer" className="btn px-4 py-2">
             Read the code & tests
           </a>
         </div>
